@@ -51,6 +51,7 @@ function ChessBoard({ gameData, onMove }) {
       scene.gameData = gameData;
       scene.selectedPiece = null;
       scene.possibleMoves = [];
+      scene.isAIThinking = false;
       
       // Draw the board (9x10 grid)
       drawBoard(scene);
@@ -66,6 +67,24 @@ function ChessBoard({ gameData, onMove }) {
     function update() {
       // Update game state regularly
       // This could handle animations, timers, etc.
+      const scene = this;
+      
+      // Check if it's AI's turn (black) in single player mode
+      if (scene.gameData && 
+          scene.gameData.options && 
+          scene.gameData.options.gameType === 'ai' &&
+          scene.gameData.currentTurn === 'black' &&
+          !scene.isAIThinking) {
+        
+        // Set flag to prevent multiple AI moves being triggered
+        scene.isAIThinking = true;
+        
+        // Delay AI move to make it feel more natural
+        scene.time.delayedCall(800, () => {
+          makeAIMove(scene);
+          scene.isAIThinking = false;
+        });
+      }
     }
 
     // Helper functions
@@ -143,6 +162,13 @@ function ChessBoard({ gameData, onMove }) {
       const side = gameObject.getData('side');
       
       console.log(`Clicked piece at (${position.x}, ${position.y}) with side ${side}`);
+      
+      // If it's AI's turn in single player mode, ignore clicks
+      if (scene.gameData.options && 
+          scene.gameData.options.gameType === 'ai' && 
+          scene.gameData.currentTurn === 'black') {
+        return;
+      }
       
       // If no piece is selected, select this one (if it's the current player's turn)
       if (!scene.selectedPiece && side === scene.gameData.currentTurn) {
@@ -284,6 +310,97 @@ function ChessBoard({ gameData, onMove }) {
       
       // Deselect the piece
       deselectPiece(scene);
+    }
+
+    function makeAIMove(scene) {
+      // Get all black pieces
+      const blackPieces = [];
+      scene.children.list.forEach(obj => {
+        if (obj.getData && obj.getData('side') === 'black') {
+          blackPieces.push(obj);
+        }
+      });
+      
+      if (blackPieces.length === 0) return;
+      
+      // Select a random piece for the AI
+      const randomIndex = Math.floor(Math.random() * blackPieces.length);
+      const selectedPiece = blackPieces[randomIndex];
+      const fromPos = selectedPiece.getData('position');
+      
+      // Get possible moves for the selected piece
+      const possiblePositions = [
+        { x: fromPos.x + 1, y: fromPos.y },
+        { x: fromPos.x - 1, y: fromPos.y },
+        { x: fromPos.x, y: fromPos.y + 1 },
+        { x: fromPos.x, y: fromPos.y - 1 }
+      ];
+      
+      // Filter out invalid positions
+      const validPositions = possiblePositions.filter(pos => {
+        // Check if position is on the board
+        if (pos.x < 0 || pos.x >= 9 || pos.y < 0 || pos.y >= 10) {
+          return false;
+        }
+        
+        // Check if position is occupied by another black piece
+        let isOccupiedByBlack = false;
+        scene.children.list.forEach(obj => {
+          if (obj.getData && obj.getData('position') && obj.getData('side') === 'black') {
+            const piecePos = obj.getData('position');
+            if (piecePos.x === pos.x && piecePos.y === pos.y) {
+              isOccupiedByBlack = true;
+            }
+          }
+        });
+        
+        return !isOccupiedByBlack;
+      });
+      
+      if (validPositions.length === 0) {
+        // Try another piece if this one has no valid moves
+        makeAIMove(scene);
+        return;
+      }
+      
+      // Choose a random valid move
+      const toPos = validPositions[Math.floor(Math.random() * validPositions.length)];
+      
+      // Get screen coordinates
+      const toX = 100 + toPos.x * 50;
+      const toY = 100 + toPos.y * 50;
+      
+      // Check if there's a red piece at the target position (capture)
+      scene.children.list.forEach(obj => {
+        if (obj.getData && obj.getData('position') && obj.getData('side') === 'red') {
+          const pos = obj.getData('position');
+          if (pos.x === toPos.x && pos.y === toPos.y) {
+            // Capture the piece
+            obj.destroy();
+          }
+        }
+      });
+      
+      // Update piece position
+      selectedPiece.setData('position', toPos);
+      
+      // Animate the move
+      scene.tweens.add({
+        targets: selectedPiece,
+        x: toX,
+        y: toY,
+        duration: 200,
+        ease: 'Power2',
+        onComplete: () => {
+          // Switch turns
+          scene.gameData.currentTurn = 'red';
+          
+          // Notify parent component
+          if (onMove) {
+            onMove(fromPos, toPos);
+          }
+        }
+      });
     }
 
     // Clean up function

@@ -69,10 +69,32 @@ function GamePage() {
   const handleGameSetup = (options) => {
     // In a real app, this would create a new game with the specified options
     console.log('Game setup with options:', options);
+    
+    // Set up appropriate players based on game type
+    let redPlayer = { id: 'player', username: 'You' };
+    let blackPlayer = null;
+    
+    if (options.gameType === 'ai') {
+      // Set up AI opponent for black
+      blackPlayer = { 
+        id: 'ai', 
+        username: `AI (${options.aiDifficulty})` 
+      };
+    } else if (options.gameType === 'friend') {
+      // For local multiplayer
+      blackPlayer = { id: 'player2', username: 'Player 2' };
+    } else if (options.gameType === 'online') {
+      // For online play, would await matchmaking in a real app
+      blackPlayer = { id: 'pending', username: 'Waiting for opponent...' };
+    }
+    
     setGameData({
       ...gameData,
       status: 'playing',
-      options
+      options,
+      redPlayer,
+      blackPlayer,
+      currentTurn: 'red' // Red always starts
     });
   };
 
@@ -153,7 +175,11 @@ function GamePage() {
             <span className="player-name">
               {gameData.blackPlayer?.username || 'Black Player'}
             </span>
-            {gameData.currentTurn === 'black' && <span className="turn-indicator">Your turn</span>}
+            {gameData.currentTurn === 'black' && 
+              <span className="turn-indicator">
+                {gameData.options?.gameType === 'ai' ? 'AI is thinking...' : 'Opponent\'s turn'}
+              </span>
+            }
           </div>
         </div>
       </div>
